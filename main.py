@@ -232,15 +232,15 @@ def init_circular_maze():
     global cell_size
     global wall_width
     global screen
-    radius = input('Radius:')
+    radius = input('Radius: ')
     if radius == '':
         radius = 10
     radius = int(radius)
-    cell_size = input('Cell_size:')
+    cell_size = input('Cell_size: ')
     if cell_size == '':
         cell_size = 20
     cell_size = int(cell_size)
-    wall_width = input('Wall_width:')
+    wall_width = input('Wall_width: ')
     if wall_width == '':
         wall_width = 3
     wall_width = int(wall_width)
@@ -249,6 +249,42 @@ def init_circular_maze():
     maze.set_exit(random.choice(list(maze.cells.keys())))
     maze.calculate_path()
     screen = pygame.display.set_mode(((radius*2-1)*cell_size, (radius*2-1)*cell_size))
+
+
+def init_rectangular_maze():
+    global maze
+    global cell_size
+    global wall_width
+    global screen
+    length = input('Length:')
+    if length == '':
+        length = 30
+    length = int(length)
+    width = input('Width: ')
+    if width == '':
+        width = 30
+    width = int(width)
+    cell_size = input('Cell_size: ')
+    if cell_size == '':
+        cell_size = 20
+    cell_size = int(cell_size)
+    wall_width = input('Wall_width: ')
+    if wall_width == '':
+        wall_width = 3
+    wall_width = int(wall_width)
+    maze = RectMaze(length, width)
+    maze.generate_maze_dfs()
+    maze.set_exit(random.choice(list(maze.cells.keys())))
+    maze.calculate_path()
+    screen = pygame.display.set_mode((length*cell_size, width*cell_size))
+
+
+def init_maze():
+    maze_type = input('maze_type(rectangular, circular): ')
+    if maze_type == 'rectangular':
+        init_rectangular_maze()
+    if maze_type == 'circular':
+        init_circular_maze()
 
 
 def set_entrance_with_mouse():
@@ -279,7 +315,8 @@ if __name__ == '__main__':
     maze: Maze
     cell_size: int
     wall_width: int
-    init_circular_maze()
+    screen: pygame.display
+    init_maze()
     running = True
     with_path = False
     while running:
