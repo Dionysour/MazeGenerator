@@ -2,18 +2,20 @@ import pygame
 import random
 import enum
 import sys
+import os
+import json
 
 from typing import Dict, Tuple, List
 
 
-class Directions(enum.Enum):
+class Directions(int, enum.Enum):
     TOP = 0
     RIGHT = 1
     BOTTOM = 2
     LEFT = 3
 
 
-class CellType(enum.Enum):
+class CellType(int, enum.Enum):
     REGULAR = 0
     IN = 1
     OUT = 2
@@ -37,6 +39,21 @@ class Cell:
 
     def get_cords(self) -> Tuple[int, int]:
         return self.x, self.y
+
+    def encode_cell(self):
+        e_walls = dict(zip(map(int, self.walls.keys()), self.walls.values()))
+        e_cell_type = int(self.cell_type)
+        return self.x, self.y, e_walls, e_cell_type
+
+    @staticmethod # [0, 0, {"0": true, "1": false, "2": true, "3": true}, 1]
+    def decode_cell(encoded_cell):
+        (x, y, e_walls, e_cell_type) = encoded_cell
+        new_cell = Cell(x, y)
+        walls = dict(zip(map(Directions, map(int, e_walls.keys())),
+                         e_walls.values()))
+        new_cell.walls = walls
+        new_cell.cell_type = CellType(e_cell_type)
+        return new_cell
 
 
 class Maze:
@@ -65,6 +82,27 @@ class Maze:
                 self.cells[cell].cell_type = CellType.REGULAR
         Maze.calculate_times.visited = {cell: 0 for cell in self.cells.keys()}
 
+    def save_maze(self, name='maze'):
+        global cell_size
+        global wall_width
+
+        with open(f'saves/{name}.json', 'w') as file:
+            e_cells = dict(zip(map(str, self.cells.keys()),
+                               map(Cell.encode_cell, self.cells.values())))
+            json.dump((e_cells, self.entrance, self.exit, cell_size, wall_width, pygame.display.get_window_size()), file)
+
+    def load_maze(self, name='maze'):
+        global cell_size
+        global wall_width
+        with open(f'saves/{name}.json', 'r') as file:
+            (e_cells, self.entrance, self.exit, cell_size, wall_width, window_size) = json.load(file)
+            self.entrance = tuple(self.entrance)
+            self.exit = tuple(self.exit)
+            self.cells = dict(zip(map(tuple, e_cells.keys()),
+                                  map(Cell.decode_cell, e_cells.values())))
+            pygame.display.set_mode(window_size)
+
+
     def distruct_walls(self, first_cell_cords: Tuple[int, int],
                        second_cell_cords: Tuple[int, int]):
         if second_cell_cords[0] - first_cell_cords[0] == 1:
@@ -80,16 +118,29 @@ class Maze:
             self.cells[first_cell_cords].walls[Directions.TOP] = False
             self.cells[second_cell_cords].walls[Directions.BOTTOM] = False
 
-    def generate_maze_dfs(self, starting_cords: Tuple[int, int] = None):
+    # Works slowly O(cells)
+    # @staticmethod
+    # def visuals(foo):
+    #     counter = 0
+    #     def wrapper(*args, **kwargs):
+    #         global cell_size
+    #         global wall_width
+    #         global maze
+    #         global clock
+    #         nonlocal counter
+    #         counter += 1
+    #         if counter % 20 == 0:
+    #             draw_maze(maze, cell_size, wall_width)
+    #         pygame.display.flip()
+    #         clock.tick(1000)
+    #         foo(*args, **kwargs)
+    #     return wrapper
+
+
+    def generate_maze_dfs(self, starting_cords: Tuple[int, int] = None, with_visuals=False):
         if starting_cords is None:
             starting_cords = self.entrance
-        if not hasattr(Maze.generate_maze_dfs, 'time'):
-            setattr(Maze.generate_maze_dfs, 't_in', {})
-            setattr(Maze.generate_maze_dfs, 't_out', {})
-            setattr(Maze.generate_maze_dfs, 'time', 0)
         x, y = starting_cords
-        Maze.generate_maze_dfs.time += 1
-        self.generate_maze_dfs.t_in[(x, y)] = Maze.generate_maze_dfs.time
         self.cells[(x, y)].visited = 1
         possible_cells: List[Tuple[int, int]] = []
 
@@ -106,10 +157,13 @@ class Maze:
         for next_cell in possible_cells:
             if not self.cells[next_cell].visited:
                 self.distruct_walls((x, y), next_cell)
-                self.generate_maze_dfs(next_cell)
+                if with_visuals:
+                    draw_cell(self.cells[(x, y)], cell_size, wall_width)
+                    draw_cell(self.cells[next_cell], cell_size, wall_width)
+                    pygame.display.flip()
+                    clock.tick(1000)
+                self.generate_maze_dfs(starting_cords=next_cell, with_visuals=with_visuals)
 
-        Maze.generate_maze_dfs.time += 1
-        Maze.generate_maze_dfs.t_out[(x, y)] = Maze.generate_maze_dfs.time
 
     def calculate_times(self, starting_cords: Tuple[int, int] = None):
         if starting_cords is None:
@@ -180,6 +234,10 @@ class CircularMaze(Maze):
         self.set_exit(self.exit)
         Maze.calculate_times.visited = {cell: 0 for cell in self.cells.keys()}
 
+    def load_maze(self, name='maze'):
+        super(CircularMaze, self).load_maze()
+        self.radius = pygame.display.get_window_size()[0] // cell_size // 2 + 1
+
 
 class RectMaze(Maze):
     width: int
@@ -200,6 +258,11 @@ class RectMaze(Maze):
         self.set_exit(self.exit)
         Maze.calculate_times.visited = {cell: 0 for cell in self.cells.keys()}
 
+    def load_maze(self, name='maze'):
+        super(RectMaze, self).load_maze()
+        self.length = pygame.display.get_window_size()[0] // cell_size
+        self.width = pygame.display.get_window_size()[1] // cell_size
+
 
 def draw_maze(maze: Maze, cell_size: int = 50, wall_width: int = 4, with_path: bool = False):
     for cell in maze.cells.values():
@@ -208,6 +271,7 @@ def draw_maze(maze: Maze, cell_size: int = 50, wall_width: int = 4, with_path: b
 
 def draw_cell(cell: Cell, cell_size: int = 50, wall_width: int = 4, with_path: bool = False, x0: int = 0, y0: int = 0):
     x, y = x0 + cell.x * cell_size, y0 + cell.y * cell_size
+    # if cell.visited == 1:
     pygame.draw.rect(screen, 'darkgreen', (x, y, cell_size, cell_size))
     if with_path:
         if cell.cell_type == CellType.PATH:
@@ -234,7 +298,7 @@ def init_circular_maze():
     global screen
     radius = input('Radius: ')
     if radius == '':
-        radius = 10
+        radius = 15
     radius = int(radius)
     cell_size = input('Cell_size: ')
     if cell_size == '':
@@ -244,11 +308,13 @@ def init_circular_maze():
     if wall_width == '':
         wall_width = 3
     wall_width = int(wall_width)
+    screen = pygame.display.set_mode(
+        ((radius * 2 - 1) * cell_size, (radius * 2 - 1) * cell_size))
     maze = CircularMaze(radius)
     maze.generate_maze_dfs()
     maze.set_exit(random.choice(list(maze.cells.keys())))
     maze.calculate_path()
-    screen = pygame.display.set_mode(((radius*2-1)*cell_size, (radius*2-1)*cell_size))
+
 
 
 def init_rectangular_maze():
@@ -273,10 +339,11 @@ def init_rectangular_maze():
         wall_width = 3
     wall_width = int(wall_width)
     maze = RectMaze(length, width)
+    screen = pygame.display.set_mode((length * cell_size, width * cell_size))
     maze.generate_maze_dfs()
     maze.set_exit(random.choice(list(maze.cells.keys())))
     maze.calculate_path()
-    screen = pygame.display.set_mode((length*cell_size, width*cell_size))
+
 
 
 def init_maze():
@@ -310,7 +377,7 @@ def set_exit_with_mouse():
 if __name__ == '__main__':
     pygame.init()
     clock = pygame.time.Clock()
-    sys.setrecursionlimit(100000)
+    sys.setrecursionlimit(10000)
 
     maze: Maze
     cell_size: int
@@ -332,6 +399,10 @@ if __name__ == '__main__':
                     maze.reset()
                     maze.generate_maze_dfs()
                     maze.calculate_path()
+                if event.key == pygame.K_s:
+                    maze.save_maze()
+                if event.key == pygame.K_a:
+                    maze.load_maze()
                 if event.key == pygame.K_e:
                     set_entrance_with_mouse()
                 if event.key == pygame.K_x:
@@ -340,5 +411,5 @@ if __name__ == '__main__':
                 running = False
 
         pygame.display.flip()
-        clock.tick(60)
+        clock.tick(20)
 
