@@ -7,6 +7,9 @@ import json
 
 from typing import Dict, Tuple, List
 
+def str_to_tuple(string):
+    string = string[1:-1]
+    return tuple(map(int, string.split(', ')))
 
 class Directions(int, enum.Enum):
     TOP = 0
@@ -91,6 +94,7 @@ class Maze:
                                map(Cell.encode_cell, self.cells.values())))
             json.dump((e_cells, self.entrance, self.exit, cell_size, wall_width, pygame.display.get_window_size()), file)
 
+
     def load_maze(self, name='maze'):
         global cell_size
         global wall_width
@@ -98,7 +102,7 @@ class Maze:
             (e_cells, self.entrance, self.exit, cell_size, wall_width, window_size) = json.load(file)
             self.entrance = tuple(self.entrance)
             self.exit = tuple(self.exit)
-            self.cells = dict(zip(map(tuple, e_cells.keys()),
+            self.cells = dict(zip(map(str_to_tuple, e_cells.keys()),
                                   map(Cell.decode_cell, e_cells.values())))
             pygame.display.set_mode(window_size)
 
@@ -164,6 +168,38 @@ class Maze:
                     clock.tick(1000)
                 self.generate_maze_dfs(starting_cords=next_cell, with_visuals=with_visuals)
 
+    def generate_maze_prims_helper(self, cur_cord, next_cord, walls):
+        not_visited = []
+        if not self.cells[next_cord].visited:
+            not_visited.append(next_cord)
+        if not self.cells[cur_cord].visited:
+            not_visited.append(cur_cord)
+        self.distruct_walls(cur_cord, next_cord)
+        walls += [(next_cord, i) for i in range(4)]
+        self.cells[random.choice(not_visited)].visited = 1
+
+    def generate_maze_prims(self, starting_cords: Tuple[int, int] = None):
+        if starting_cords is None:
+            starting_cords = self.entrance
+        walls = [(starting_cords, i) for i in range(4)]
+        while len(walls) != 0:
+            index = random.randint(0, len(walls) - 1)
+            (x, y), n_wall = walls[index]
+            if Directions(n_wall) == Directions.TOP and \
+                    (x, y-1) in self.cells and \
+                    (not self.cells[(x, y-1)].visited or not self.cells[(x, y)].visited):
+                Maze.generate_maze_prims_helper(self, (x, y), (x, y-1), walls)
+            if Directions(n_wall) == Directions.BOTTOM and \
+                    (x, y+1) in self.cells and not self.cells[(x, y+1)].visited:
+                Maze.generate_maze_prims_helper(self, (x, y), (x, y+1), walls)
+            if Directions(n_wall) == Directions.RIGHT and \
+                    (x+1, y) in self.cells and not self.cells[(x+1, y)].visited:
+                Maze.generate_maze_prims_helper(self, (x, y), (x+1, y), walls)
+            if Directions(n_wall) == Directions.LEFT and \
+                    (x-1, y) in self.cells and not self.cells[(x-1, y)].visited:
+                Maze.generate_maze_prims_helper(self, (x, y), (x-1, y), walls)
+            walls[-1], walls[index] = walls[index], walls[-1]
+            walls.pop()
 
     def calculate_times(self, starting_cords: Tuple[int, int] = None):
         if starting_cords is None:
@@ -340,14 +376,20 @@ def init_rectangular_maze():
     wall_width = int(wall_width)
     maze = RectMaze(length, width)
     screen = pygame.display.set_mode((length * cell_size, width * cell_size))
-    maze.generate_maze_dfs()
+    maze.generate_maze_prims()
     maze.set_exit(random.choice(list(maze.cells.keys())))
     maze.calculate_path()
 
 
 
 def init_maze():
-    maze_type = input('maze_type(rectangular, circular): ')
+    global maze
+    ans = input('Load maze(y/n): ')
+    if ans == 'y':
+        maze.load_maze(input('File name: '))
+        return
+    maze_generator = int(input("Maze generator(0: Prim, 1: DFS)"))
+    maze_type = input('Maze type(rectangular, circular): ')
     if maze_type == 'rectangular':
         init_rectangular_maze()
     if maze_type == 'circular':
