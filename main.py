@@ -367,7 +367,7 @@ def init_rectangular_maze(maze_generator: int):
     global cell_size
     global wall_width
     global screen
-    length = input('Length:')
+    length = input('Length: ')
     if length == '':
         length = 30
     length = int(length)
@@ -410,7 +410,7 @@ def init_maze():
     with_visuals = input('With visuals?(y/n): ')
     if with_visuals == 'y':
         with_visuals = True
-        fps = int(input('Fps: '))
+        fps = int(input('Construction speed: '))
     if with_visuals == 'n':
         with_visuals = False
     if maze_type == 0:
